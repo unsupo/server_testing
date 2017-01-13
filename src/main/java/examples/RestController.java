@@ -59,26 +59,69 @@ public class RestController {
     private String checkDatabase(String type, String name) throws SQLException, ClassNotFoundException, GeneralSecurityException, IOException {
         String tableName = "testing";
         List<HashMap<String,Object>> result = null;
+        Object data = name;
         try {
             String query = "select * from "+ tableName+" where ";
             if(type.equalsIgnoreCase(GOOGLE))
-                result = Database.query(query+"email = '"+getGooglePayload(name).getEmail()+"'");
+                result = Database.query(query+"email = '"+((Payload)(data = getGooglePayload(name))).getEmail()+"'");
             else if(type.equalsIgnoreCase(FACEBOOK))
-                result = Database.query(query+"email = '"+""+"'");
-
+                result = Database.query(query+"email = '"+((User)(data = getFacebookUserData(name))).getEmail()+"'");
+            else
+                result = Database.query(query+"email = '"+name.split("\\|")[0]+" and password = '"+name.split("\\|")[1]);
         } catch (Exception e) {
             if(e.getMessage().contains("relation \""+tableName+"\" does not exist")) {
-                DataBaseInit.createTable(tableName);
+                DataBaseInit.createTable(tableName); //table doesn't exist, so create table and try again
                 return checkDatabase(type,name);
             }
             throw e;
         }
 
         if(result == null || result.size() == 0){
-            if(type.equalsIgnoreCase("default"))
-                return "NEW_USER";
+            //Insert query because record doesn't exist
+            if(type.equalsIgnoreCase(GOOGLE)) {
+                Payload payload = (Payload) data;
+                String id = payload.getUserId();
+                String email = payload.getEmail();
+                Boolean verified = payload.getEmailVerified();
+                String pictureUrl = (String) payload.get("picture");
+                String locale = (String) payload.get("locale");
+                String familyName = (String) payload.get("family_name");
+                String givenName = (String) payload.get("given_name");
+                Database.query(String.format("INSERT INTO " + tableName + "" +
+                        "(key,email,emailvarified,firstname,lastname,pictureurl,locale,userid)" +
+                        "values(%s,%s,%s,%s,%s,%s,%s,%s)",
+                        name,email,verified,givenName,familyName,pictureUrl,locale,id));
+            }else if(type.equalsIgnoreCase(FACEBOOK)){
+                User user = (User) data;
+                String email = user.getEmail();
+//                user.getAbout();
+//                user.getAgeRange();
+//                user.getBio();
+//                user.getBirthday();
+//                user.getBirthdayAsDate();
+//                user.getCover();
+//                user.getCurrency();
+                String firstname = user.getFirstName();
+                String lastname = user.getLastName();
+//                user.getGender();
+//                user.getLocale();
+//                user.getPicture().getUrl();
+                Boolean verified = user.getVerified();
+                String id = user.getId();
 
-            Database.query(String.format("INSERT INTO "+ tableName + "()values(%s,%s,%s)")); //Insert query because record doesn't exist
+                Database.query(String.format("INSERT INTO " + tableName +""+
+                        "(key,email,emailvarified,firstname,lastname,userid)" +
+                        "values(%s,%s,%s,%s,%s,%s,%s)",
+                        name,email,verified,firstname,lastname,id));
+            }else{
+                String[] nameV = name.split("\\|");
+                String email = nameV[0];
+                String pass = nameV[1];
+                Boolean verified = false;
+                Database.query(String.format("INSERT INTO " + tableName +""+
+                        "(key,email,emailvarified,password)" +
+                        "values(%s,%s,%s,%s)", name,email,verified,pass));
+            }
             return "NEW_USER";
         }
 
